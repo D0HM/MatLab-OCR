@@ -1,0 +1,8 @@
+image_id,filename,texture,split,source,has_text,annotation_status
+Image07,Image07.jpg,scene_sign,provided,user_supplied_challenge02,1,reviewed
+Image22,Image22.jpg,scene_sign,provided,user_supplied_challenge02,1,reviewed
+TextureText02,TextureText02.jpg,textured_glyph,provided,user_supplied_challenge02,1,reviewed
+TextureText03,TextureText03.jpg,textured_glyph,provided,user_supplied_challenge02,1,reviewed
+TextureText04,TextureText04.jpg,textured_glyph,provided,user_supplied_challenge02,1,reviewed
+TextureText07,TextureText07.jpg,textured_glyph,provided,user_supplied_challenge02,1,reviewed
+texture_text,texture text.jpg,mixed_layout,provided,user_supplied_challenge02,1,reviewed

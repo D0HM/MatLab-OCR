@@ -1,0 +1,2 @@
+Put your real JPG/PNG photographs in this folder, then run label_dataset in MATLAB.
+Do not use the synthetic demo images as a substitute for real scene-text experiments.
