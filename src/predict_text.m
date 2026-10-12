@@ -11,7 +11,7 @@ if string(detector) == "ocr"
         r = ocr_compat(P, layouts{k}, cfg);
         pred = append_result(pred, r, [0 0], cfg);
     end
-    pred = merge_overlapping_words(pred, cfg.IoUThreshold);
+    pred = merge_overlapping_words(pred, cfg);
     % This is returned-word localization, NOT an independent detector.
     candidates = pred{:,1:4};
 elseif string(detector) == "mser"
@@ -26,6 +26,17 @@ elseif string(detector) == "mser"
         r = ocr_compat(crop, 'block', cfg);
         pred = append_result(pred, r, [x1-1 y1-1], cfg);
     end
+elseif string(detector) == "mser_refine"
+    % Two-stage scene-text route: MSER proposes regions; OCR only sees padded crops.
+    [candidates, mask] = detect_mser_words(P, cfg);
+    candidates = prune_candidate_boxes(candidates, size(P), cfg);
+    pred = recognize_candidate_crops(P, candidates, cfg);
+    if isempty(pred)
+        % MSER can return only texture fragments. Re-propose locations, then re-read their crops.
+        proposals = full_image_proposals(P, cfg);
+        candidates = prune_candidate_boxes(proposals{:,1:4}, size(P), cfg);
+        pred = recognize_candidate_crops(P, candidates, cfg);
+    end
 else
     error('SceneText:Detector', 'Unknown detector: %s', detector);
 end
@@ -38,19 +49,59 @@ if isfield(cfg, fieldName), layouts = cfg.(fieldName); else, layouts = {fallback
 if ischar(layouts) || isstring(layouts), layouts = cellstr(layouts); end
 end
 
-function pred = merge_overlapping_words(pred, threshold)
-% MERGE_OVERLAPPING_WORDS Retains the highest-confidence reading at each location.
+function proposals = full_image_proposals(P, cfg)
+% FULL_IMAGE_PROPOSALS Supplies crop locations when classical MSER has no stable region.
+proposals = table(zeros(0,1),zeros(0,1),zeros(0,1),zeros(0,1),strings(0,1),zeros(0,1), ...
+    'VariableNames',{'x','y','width','height','text','confidence'});
+layouts = get_layouts(cfg, 'OCRLayouts', cfg.OCRLayout);
+for k = 1:numel(layouts)
+    proposals = append_result(proposals, ocr_compat(P, layouts{k}, cfg), [0 0], cfg);
+end
+proposals = merge_overlapping_words(proposals, cfg);
+end
+
+function pred = recognize_candidate_crops(P, candidates, cfg)
+% RECOGNIZE_CANDIDATE_CROPS Runs OCR layouts only inside detector-selected regions.
+pred = table(zeros(0,1),zeros(0,1),zeros(0,1),zeros(0,1),strings(0,1),zeros(0,1), ...
+    'VariableNames',{'x','y','width','height','text','confidence'});
+layouts = get_layouts(cfg, 'CropOCRLayouts', 'word');
+for k = 1:size(candidates,1)
+    b = candidates(k,:);
+    x1 = max(1,floor(b(1)-cfg.ROIPadding)); y1 = max(1,floor(b(2)-cfg.ROIPadding));
+    x2 = min(size(P,2),ceil(b(1)+b(3)-1+cfg.ROIPadding)); y2 = min(size(P,1),ceil(b(2)+b(4)-1+cfg.ROIPadding));
+    crop = P(y1:y2,x1:x2,:);
+    for ell = 1:numel(layouts)
+        % The crop is already F1/F2 frequency-preprocessed by run_experiment.
+        pred = append_result(pred, ocr_compat(crop, layouts{ell}, cfg), [x1-1 y1-1], cfg);
+    end
+end
+pred = merge_overlapping_words(pred, cfg);
+end
+
+function pred = merge_overlapping_words(pred, cfg)
+% MERGE_OVERLAPPING_WORDS Removes duplicate and contained OCR reads after crop refinement.
 if height(pred) < 2, return; end
-boxes = pred{:,1:4}; score = pred.confidence; score(~isfinite(score)) = -inf;
+boxes = pred{:,1:4}; score = pred.confidence.*sqrt(min(strlength(pred.text),8)); score(~isfinite(score)) = -inf;
 [~, order] = sort(score, 'descend'); keep = false(height(pred),1); kept = zeros(0,1);
 for i = order(:)'
     overlaps = false;
     for j = kept(:)'
-        if box_iou_layout(boxes(i,:), boxes(j,:)) >= threshold, overlaps = true; break; end
+        if box_iou_layout(boxes(i,:), boxes(j,:)) >= cfg.ResultNMSIoU ...
+                || contained_fraction(boxes(i,:), boxes(j,:)) >= cfg.ResultContainment
+            overlaps = true; break;
+        end
     end
     if ~overlaps, keep(i) = true; kept(end+1) = i; end %#ok<AGROW>
 end
 pred = pred(keep,:);
+end
+
+function value = contained_fraction(a, b)
+% CONTAINED_FRACTION Detects nested boxes that ordinary IoU does not suppress.
+x1=max(a(1),b(1)); y1=max(a(2),b(2));
+x2=min(a(1)+a(3),b(1)+b(3)); y2=min(a(2)+a(4),b(2)+b(4));
+intersection=max(0,x2-x1)*max(0,y2-y1);
+value=intersection/max(min(a(3)*a(4),b(3)*b(4)),eps);
 end
 
 function value = box_iou_layout(a, b)
@@ -67,7 +118,8 @@ words = string(r.Words(:));
 words = regexprep(strtrim(words), '^[^A-Za-z0-9]+|[^A-Za-z0-9]+$', '');
 boxes = double(r.WordBoundingBoxes);
 conf = double(r.WordConfidences(:));
-keep = strlength(words) > 0 & ~cellfun(@isempty,regexp(cellstr(words),'^[A-Za-z0-9]+$','once')) ...
+minChars = 1; if isfield(cfg,'MinRecognizedChars'), minChars = cfg.MinRecognizedChars; end
+keep = strlength(words) >= minChars & ~cellfun(@isempty,regexp(cellstr(words),'^[A-Za-z0-9]+$','once')) ...
     & all(isfinite(boxes),2) ...
     & boxes(:,3) > 0 & boxes(:,4) > 0;
 % At the default zero threshold, retain NaN confidences as unknown confidence.

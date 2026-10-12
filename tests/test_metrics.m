@@ -164,6 +164,7 @@ end
 
 function [cfg,gt,p]=fixture()
 cfg=project_config();
+cfg.Detectors="ocr"; % Metrics fixtures exercise a fixed detector independent of project defaults.
 gt=table(["a";"a"],[1;2],[10;80],[10;10],[50;50],[20;20], ...
     ["hello";"world"],'VariableNames', ...
     {'image_id','word_index','x','y','width','height','text'});

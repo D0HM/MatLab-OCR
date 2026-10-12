@@ -39,3 +39,10 @@ V=fft_variants(I,cfg);
 verifyEqual(t,numel(V),4); % 2 channels x notch off/on
 verifyTrue(t,any(strcmp({V.name},'bgdist_notch_lowpass_sig0.020_s0.50')));
 end
+
+function testPruneCandidateBoxes(t)
+cfg=smallcfg(); cfg.CandidateContainment=0.75; cfg.MaxCandidateAreaFraction=0.8; cfg.MaxCandidateBoxes=10;
+boxes=[10 10 80 30; 20 15 10 8; 120 10 20 20; 1 1 200 100];
+actual=prune_candidate_boxes(boxes,[100 200],cfg);
+verifyEqual(t,actual,[10 10 80 30; 120 10 20 20]);
+end
