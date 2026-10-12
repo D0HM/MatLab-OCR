@@ -1,7 +1,7 @@
 function V = fft_variants(I, cfg)
 % FFT_VARIANTS Build OCR input candidates for method F3 (frequency-domain core).
-% For each channel x notch(on/off) x Gaussian cutoff x downscale:
-%   symmetric pad -> [FFT notch: remove periodic texture peaks] -> FFT lowpass -> crop
+% For each channel x notch(on/off) x frequency pipeline x Gaussian cutoff x scale:
+%   symmetric pad -> [FFT notch] -> [homomorphic] -> FFT lowpass -> [FFT high-boost] -> crop
 %   -> area downscale -> dark-text-on-light polarity -> white border.
 % Channels: gray | sat (saturation) | val (max RGB) | bgdist (colour distance from the
 % image-border colour; text/object bright, so it is inverted to dark-on-light).
@@ -19,6 +19,8 @@ else
     names = {'gray'}; data = {I}; flip = false;
 end
 notchModes = getf(cfg,'F3Notch',false);
+pipelines = getf(cfg,'F3Pipelines',{'lowpass'});
+if ischar(pipelines) || isstring(pipelines), pipelines = cellstr(pipelines); end
 b = cfg.F3Border;
 V = struct('image',{},'sx',{},'sy',{},'border',{},'name',{});
 for c = 1:numel(cfg.F3Channels)
@@ -28,13 +30,26 @@ for c = 1:numel(cfg.F3Channels)
     pad = max(8, round(min(size(A0))*cfg.FFTPadFraction));
     Ap = sym_pad(A0, pad);
     for nm = notchModes(:)'
-        A = Ap; tag = '';
-        if nm, A = notch_suppress(Ap, cfg); tag = '_notch'; end
-        for sig = cfg.F3Sigmas(:)'
-            c2 = cfg; c2.GaussianCutoff = sig;
-            [B, ~] = fft_domain_filter(A, 'lowpass', c2);
-            B = B(pad+1:end-pad, pad+1:end-pad);
-            for s = cfg.F3Scales(:)'
+        An = Ap; notchTag = '';
+        if nm, An = notch_suppress(Ap, cfg); notchTag = '_notch'; end
+        for q = 1:numel(pipelines)
+            pipeline = char(pipelines{q}); A = An; pipeTag = ['_' pipeline];
+            if strcmp(pipeline,'homomorphic_highboost')
+                % Log-domain FFT filtering removes slow illumination before texture filtering.
+                [logA, ~] = fft_domain_filter(log(max(A,1/255)), 'homomorphic', cfg);
+                A = exp(logA);
+            elseif ~strcmp(pipeline,'lowpass')
+                error('SceneText:F3Pipeline','Unknown F3 pipeline: %s',pipeline);
+            end
+            for sig = cfg.F3Sigmas(:)'
+                c2 = cfg; c2.GaussianCutoff = sig;
+                [B, ~] = fft_domain_filter(A, 'lowpass', c2);
+                if strcmp(pipeline,'homomorphic_highboost')
+                    % Restore text-edge contrast with an explicit FFT high-boost transfer function.
+                    [B, ~] = fft_domain_filter(B, 'highboost', c2);
+                end
+                B = B(pad+1:end-pad, pad+1:end-pad);
+                for s = cfg.F3Scales(:)'
                 [h, w] = size(B);
                 h2 = max(8, round(h*s)); w2 = max(8, round(w*s));
                 sx = w2/w; sy = h2/h;
@@ -43,7 +58,7 @@ for c = 1:numel(cfg.F3Channels)
                 U = [255*ones(b, w2+2*b, 'uint8'); ...
                      255*ones(h2, b, 'uint8'), U, 255*ones(h2, b, 'uint8'); ...
                      255*ones(b, w2+2*b, 'uint8')];
-                nmx = sprintf('%s%s_sig%.3f_s%.2f', names{k}, tag, sig, s);
+                nmx = sprintf('%s%s%s_sig%.3f_s%.2f', names{k}, notchTag, pipeTag, sig, s);
                 V(end+1) = struct('image', U, 'sx', sx, 'sy', sy, 'border', b, 'name', nmx); %#ok<AGROW>
                 if cfg.F3Invert
                     V(end+1) = struct('image', 255-U, 'sx', sx, 'sy', sy, 'border', b, 'name', [nmx '_inv']); %#ok<AGROW>
@@ -51,6 +66,7 @@ for c = 1:numel(cfg.F3Channels)
             end
         end
     end
+end
 end
 end
 

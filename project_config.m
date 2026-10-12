@@ -9,7 +9,9 @@ cfg.Methods = ["M0", "F1", "F2", "F3"];
 cfg.Detectors = "ocr"; 
 cfg.Split = "test"; 
 cfg.Language = 'english';
-cfg.OCRLayout = 'auto'; % Changed from 'block' to prevent texture hallucinations[cite: 3]
+% Run complementary OCR layouts: word recovers logo-like text; auto/block retain scenes.
+cfg.OCRLayouts = {'auto','word','block'};
+cfg.OCRLayout = 'auto'; % Backward-compatible fallback for saved configurations.
 cfg.MinConfidence = 0.25; % Retained to capture raw box confidences before filtering[cite: 4]
 cfg.IoUThreshold = 0.5;
 cfg.CaseSensitive = false;
@@ -43,19 +45,21 @@ cfg.HighBoostCutoff = 0.04;
 cfg.HighBoostAmount = 0.3;
 cfg.MinConfidence = 0.2;
 
-% F3 = multi-variant FFT lowpass (cutoffs in cycles/pixel of the ORIGINAL image)
-% + downscale + OCR on every variant + merge. Slow on CPU: |channels|*|sigmas|*|scales| OCR calls/image.
+% F3 = multi-variant frequency-domain OCR: low-pass and F2-style FFT pipelines.
+% Runtime is |channels|*|pipelines|*|sigmas|*|scales|*|layouts| OCR calls/image.
 cfg.F3Channels = {'gray','sat','val','bgdist'}; % bgdist = colour distance from border colour
-cfg.F3Notch = [false true];          % also try FFT notch (removes periodic texture)
+cfg.F3Pipelines = {'lowpass','homomorphic_highboost'};
+cfg.F3Notch = false;                 % Enable only for known periodic texture; it doubles runtime.
 cfg.F3NotchPeaks = 4; cfg.F3NotchSigma = 1.5; cfg.F3NotchMinRes = 0.8; cfg.F3NotchMinFreq = 0.015;
-cfg.F3Sigmas = [0.02 0.04 0.06];
-cfg.F3Scales = [0.06 0.08 0.10 0.13 0.17 0.22 0.30 0.40 0.50 0.60];
+cfg.F3Sigmas = [0.04 0.065 0.09];
+cfg.F3Scales = [0.75 1.00];          % Avoid former 6-60%% scales that remove character detail.
 cfg.F3Invert = false;
-cfg.F3Border = 20;
-cfg.F3Layout = 'auto';
+cfg.F3Border = 0; % A white frame changed dark textured-word recognition; enable only if an image touches its edge.
+cfg.F3Layouts = {'auto','word'};
+cfg.F3Layout = 'auto'; % Backward-compatible fallback for saved configurations.
 cfg.F3MinConfidence = 0.30; % OCR confidence 0..1
 cfg.F3MinChars = 2;
 cfg.F3NMSIoU = 0.30;
-cfg.F3MinVotes = 2; % same word seen in >=2 variants (suppresses one-off noise)
+cfg.F3MinVotes = 1; % Keep a valid read from one complementary frequency/layout variant.
 cfg.RequireReviewedGT = true;
 end
