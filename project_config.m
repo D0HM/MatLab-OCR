@@ -5,8 +5,8 @@ root = fileparts(mfilename('fullpath'));
 cfg.Root = root;
 cfg.DataDir = fullfile(root, 'data', char(dataset));
 cfg.OutputRoot = fullfile(root, 'results');
-cfg.Methods = ["M0", "F1", "F2", "F3"]; 
-cfg.Detectors = "mser_refine"; % Detect candidate regions, then OCR each crop.
+cfg.Methods = ["M0", "F1", "F2", "F3", "F4"];
+cfg.Detectors = ["craft", "mser_refine"]; % craft needs the Text Detection add-on
 cfg.Split = "test"; 
 cfg.Language = 'english';
 % Run complementary OCR layouts: word recovers logo-like text; auto/block retain scenes.
@@ -68,5 +68,11 @@ cfg.F3MinConfidence = 0.30; % OCR confidence 0..1
 cfg.F3MinChars = 2;
 cfg.F3NMSIoU = 0.30;
 cfg.F3MinVotes = 1; % Keep a valid read from one complementary frequency/layout variant.
+% CRAFT detector + FFT straightening (predict_text_craft / ocr_deskew_core)
+cfg.CraftDetectOnOriginal = true;  % detect on the unfiltered image, recognize on the FFT-processed crops
+cfg.CraftCharThreshold = 0.3; cfg.CraftMaxBoxes = 60;
+cfg.CraftLayouts = {'word','block'}; cfg.CraftTryInvert = true;
+cfg.DeskewMinAngle = 3; cfg.DeskewMaxAngle = 35;
+% F4 per-box FFT variants (optional overrides): F4MaxCrops=12 F4TargetHeights=[32 48 72] F4Sigmas=[0.04 0.09]
 cfg.RequireReviewedGT = true;
 end

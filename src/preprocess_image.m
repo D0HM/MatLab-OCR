@@ -9,7 +9,7 @@ switch string(method)
         P = I;
     case {"F1","F2"}
         [P,stages] = preprocess_frequency(G,method,cfg);
-    case "F3"
+    case {"F3","F4"}
         % Display/diagnostic image only: OCR for F3 runs on fft_variants (see predict_text_variants).
         [P,stages] = preprocess_frequency(G,'F2',cfg);
     case "M1"

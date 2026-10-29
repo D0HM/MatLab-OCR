@@ -1,5 +1,7 @@
-function [pred, candidates, mask] = predict_text(P, detector, cfg)
+function [pred, candidates, mask] = predict_text(P, detector, cfg, Iorig)
 % PREDICT_TEXT Keep candidate detection separate from recognized word output.
+% Iorig (optional): the unfiltered image. Detector "craft" finds boxes on it, then reads crops of P.
+if nargin < 4, Iorig = P; end
 pred = table(zeros(0,1), zeros(0,1), zeros(0,1), zeros(0,1), ...
     strings(0,1), zeros(0,1), 'VariableNames', ...
     {'x','y','width','height','text','confidence'});
@@ -26,6 +28,10 @@ elseif string(detector) == "mser"
         r = ocr_compat(crop, 'block', cfg);
         pred = append_result(pred, r, [x1-1 y1-1], cfg);
     end
+elseif string(detector) == "craft"
+    % Pretrained CRAFT text detector + FFT-straightened per-box OCR (needs the Text Detection add-on).
+    [pred, candidates] = predict_text_craft(P, cfg, Iorig);
+    mask = false(size(P,1),size(P,2));
 elseif string(detector) == "mser_refine"
     % Two-stage scene-text route: MSER proposes regions; OCR only sees padded crops.
     [candidates, mask] = detect_mser_words(P, cfg);

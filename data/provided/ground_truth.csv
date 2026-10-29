@@ -9,6 +9,16 @@ Image22,1,90,124,466,224,COMING
 Image22,2,145,228,416,158,SOON
 TextureText02,1,31,44,465,160,PSD
 TextureText03,1,1,80,568,297,EARTH
+TextureText03,2,22,404,32,20,The
+TextureText03,3,62,405,44,19,earth
+TextureText03,4,115,404,13,20,is
+TextureText03,5,137,405,27,19,but
+TextureText03,6,172,409,31,15,one
+TextureText03,7,212,406,71,23,country
+TextureText03,8,292,405,31,19,and
+TextureText03,9,332,405,76,19,mankind
+TextureText03,10,417,405,19,19,its
+TextureText03,11,446,405,71,19,citizens
 TextureText04,1,19,50,224,96,FUR
 TextureText07,1,25,44,553,160,CANDY
 TextureText07,2,80,224,438,153,CANE

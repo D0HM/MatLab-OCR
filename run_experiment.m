@@ -36,6 +36,7 @@ try
         gt = sortrows(gtAll(gtAll.image_id==id,:),'word_index');
         for method = cfg.Methods
             for detector = cfg.Detectors
+                if any(method==["F3","F4"]) && detector ~= cfg.Detectors(1), continue; end % F3/F4 ignore the detector
                 iteration = iteration+1;
                 fprintf('[%d/%d] %s | %s | %s\n',iteration,total,id,method,detector);
                 fprintf(logID,'[%d/%d] %s | %s | %s\n',iteration,total,id,method,detector);
@@ -43,8 +44,10 @@ try
                 [P,stages] = preprocess_image(I,method,cfg);
                 if method == "F3"
                     [pred,candidates] = predict_text_variants(I,cfg); mask = false(size(P,1),size(P,2));
+                elseif method == "F4"
+                    [pred,candidates] = predict_text_crops(I,cfg); mask = false(size(P,1),size(P,2));
                 else
-                    [pred,candidates,mask] = predict_text(P,detector,cfg);
+                    [pred,candidates,mask] = predict_text(P,detector,cfg,I);
                 end
                 elapsed = toc(imageTimer);
                 annotationStatus = images.annotation_status(k);
